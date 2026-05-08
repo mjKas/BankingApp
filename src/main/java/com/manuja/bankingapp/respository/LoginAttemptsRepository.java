@@ -1,4 +1,4 @@
-package com.manuja.bankingapp.responses;
+package com.manuja.bankingapp.respository;
 
 import com.manuja.bankingapp.model.LoginAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,6 +1,6 @@
 package com.manuja.bankingapp.config;
 
-import com.manuja.bankingapp.responses.UserRepository;
+import com.manuja.bankingapp.respository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;

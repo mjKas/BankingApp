@@ -1,4 +1,4 @@
-package com.manuja.bankingapp.responses;
+package com.manuja.bankingapp.respository;
 
 import com.manuja.bankingapp.model.User;
 import org.springframework.data.repository.CrudRepository;

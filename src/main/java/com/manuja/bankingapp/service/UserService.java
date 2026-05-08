@@ -1,7 +1,7 @@
 package com.manuja.bankingapp.service;
 
 import com.manuja.bankingapp.model.User;
-import com.manuja.bankingapp.responses.UserRepository;
+import com.manuja.bankingapp.respository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

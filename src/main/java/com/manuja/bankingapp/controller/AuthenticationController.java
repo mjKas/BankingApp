@@ -4,16 +4,20 @@ import com.manuja.bankingapp.dto.LoginUserDto;
 import com.manuja.bankingapp.dto.RegisterUserDto;
 import com.manuja.bankingapp.dto.VerifyUserDto;
 import com.manuja.bankingapp.model.User;
-import com.manuja.bankingapp.repository.LoginResponse;
+import com.manuja.bankingapp.reponses.LoginResponse;
+import com.manuja.bankingapp.reponses.MessageResponse;
+import com.manuja.bankingapp.reponses.SignupResponse;
 import com.manuja.bankingapp.service.AuthenticationService;
 import com.manuja.bankingapp.service.JwtService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
+@CrossOrigin(origins = "http://localhost:5173")
 public class AuthenticationController {
     private final JwtService jwtService;
 
@@ -25,10 +29,14 @@ public class AuthenticationController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<User> register(@RequestBody RegisterUserDto registerUserDto, HttpServletRequest request) {
+    public ResponseEntity<SignupResponse> register(@RequestBody RegisterUserDto registerUserDto, HttpServletRequest request) {
         String ipAddress = request.getRemoteAddr();
         User registeredUser = authenticationService.signup(registerUserDto, ipAddress);
-        return ResponseEntity.ok(registeredUser);
+        SignupResponse response = new SignupResponse(
+                "User registered successfully",
+                registeredUser.getEmail()
+        );
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
@@ -36,15 +44,19 @@ public class AuthenticationController {
         String ipAddress = request.getRemoteAddr();
         User authenticatedUser = authenticationService.authenticate(loginUserDto, ipAddress);
         String jwtToken = jwtService.generateToken(authenticatedUser);
-        LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime());
+        LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime(),"Login Successful");
+
         return ResponseEntity.ok(loginResponse);
+
     }
 
     @PostMapping("/verify")
     public ResponseEntity<?> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
         try {
             authenticationService.verifyUser(verifyUserDto);
-            return ResponseEntity.ok("Account verified successfully");
+            return ResponseEntity.ok(  new MessageResponse(
+                    "Account verified successfully"
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

@@ -5,8 +5,8 @@ import com.manuja.bankingapp.dto.RegisterUserDto;
 import com.manuja.bankingapp.dto.VerifyUserDto;
 import com.manuja.bankingapp.model.LoginAttempt;
 import com.manuja.bankingapp.model.User;
-import com.manuja.bankingapp.responses.LoginAttemptsRepository;
-import com.manuja.bankingapp.responses.UserRepository;
+import com.manuja.bankingapp.respository.LoginAttemptsRepository;
+import com.manuja.bankingapp.respository.UserRepository;
 import jakarta.mail.MessagingException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 @Service
 public class AuthenticationService {
     private final UserRepository userRepository;
@@ -61,21 +63,27 @@ public class AuthenticationService {
 
     public User authenticate(LoginUserDto input, String ipAddress) {
         List<LoginAttempt> recentAttempts = loginAttemptRepository.findByEmailAndAttemptTimeAfter(
-                        input.getEmail(),
-                        LocalDateTime.now().minusMinutes(2)
-                );
+                input.getEmail(),
+                LocalDateTime.now().minusMinutes(2)
+        );
         long failedAttempts = recentAttempts.stream()
                 .filter(attempt -> !attempt.isSuccessful())
                 .count();
         if (failedAttempts >= 5) {
-            throw new RuntimeException(
+            SendLoginWarning(input.getEmail());
+            throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
                     "Suspicious activity detected. Too many failed attempts."
             );
         }
         User user = userRepository.findByEmail(input.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
         if (!user.isEnabled()) {
-            throw new RuntimeException(
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
                     "Account not verified. Please verify your account."
             );
         }
@@ -104,7 +112,10 @@ public class AuthenticationService {
             failedAttempt.setAttemptTime(LocalDateTime.now());
             failedAttempt.setStatus("FAILED");
             loginAttemptRepository.save(failedAttempt);
-            throw new RuntimeException("Invalid email or password");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid email or password"
+            );
         }
     }
 
@@ -113,7 +124,10 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new RuntimeException("Verification code has expired");
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Verification code has expired"
+                );
             }
             if (user.getVerificationCode().equals(input.getVerificationCode())) {
                 user.setEnabled(true);
@@ -121,10 +135,16 @@ public class AuthenticationService {
                 user.setVerificationCodeExpiresAt(null);
                 userRepository.save(user);
             } else {
-                throw new RuntimeException("Invalid verification code");
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid verification code"
+                );
             }
         } else {
-            throw new RuntimeException("User not found");
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "User not found"
+            );
         }
     }
 
@@ -133,18 +153,29 @@ public class AuthenticationService {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (user.isEnabled()) {
-                throw new RuntimeException("Account is already verified");
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Account is already verified"
+                );
             }
             user.setVerificationCode(generateVerificationCode());
             user.setVerificationCodeExpiresAt(LocalDateTime.now().plusHours(1));
             sendVerificationEmail(user);
             userRepository.save(user);
         } else {
-            throw new RuntimeException("User not found");
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "User not found"
+            );
         }
     }
+    private String generateVerificationCode() {
+        Random random = new Random();
+        int code = random.nextInt(900000) + 100000;
+        return String.valueOf(code);
+    }
 
-    private void sendVerificationEmail(User user) { //TODO: Update with company logo
+    private void sendVerificationEmail(User user) {
         String subject = "Account Verification";
         String verificationCode = "VERIFICATION CODE " + user.getVerificationCode();
         String htmlMessage = "<html>"
@@ -167,9 +198,29 @@ public class AuthenticationService {
             e.printStackTrace();
         }
     }
-    private String generateVerificationCode() {
-        Random random = new Random();
-        int code = random.nextInt(900000) + 100000;
-        return String.valueOf(code);
+
+
+
+
+    private void SendLoginWarning(String email) {
+        String subject = "Login warning";
+        String htmlMessage = "<html>"
+                + "<body style=\"font-family: Arial, sans-serif;\">"
+                + "<div style=\"background-color: #f5f5f5; padding: 20px;\">"
+                + "<h2 style=\"color: #FF0000;\">False Login!</h2>"
+                + "<p style=\"font-size: 16px;\">Unsuccessful Login attempts detected.</p>"
+                + "<div style=\"background-color: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1);\">"
+
+                + "</div>"
+                + "</div>"
+                + "</body>"
+                + "</html>";
+
+        try {
+            emailService.sendVerificationEmail(email, subject, htmlMessage);
+        } catch (MessagingException e) {
+            // Handle email sending exception
+            e.printStackTrace();
+        }
     }
 }
