@@ -7,11 +7,13 @@ import com.manuja.bankingapp.model.User;
 import com.manuja.bankingapp.repository.LoginResponse;
 import com.manuja.bankingapp.service.AuthenticationService;
 import com.manuja.bankingapp.service.JwtService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
+@RestController
+@RequestMapping("/auth")
 public class AuthenticationController {
     private final JwtService jwtService;
 
@@ -23,14 +25,16 @@ public class AuthenticationController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<User> register(@RequestBody RegisterUserDto registerUserDto) {
-        User registeredUser = authenticationService.signup(registerUserDto);
+    public ResponseEntity<User> register(@RequestBody RegisterUserDto registerUserDto, HttpServletRequest request) {
+        String ipAddress = request.getRemoteAddr();
+        User registeredUser = authenticationService.signup(registerUserDto, ipAddress);
         return ResponseEntity.ok(registeredUser);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto){
-        User authenticatedUser = authenticationService.authenticate(loginUserDto);
+    public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto,  HttpServletRequest request){
+        String ipAddress = request.getRemoteAddr();
+        User authenticatedUser = authenticationService.authenticate(loginUserDto, ipAddress);
         String jwtToken = jwtService.generateToken(authenticatedUser);
         LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime());
         return ResponseEntity.ok(loginResponse);

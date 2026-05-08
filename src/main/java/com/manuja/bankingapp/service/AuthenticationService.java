@@ -3,59 +3,109 @@ package com.manuja.bankingapp.service;
 import com.manuja.bankingapp.dto.LoginUserDto;
 import com.manuja.bankingapp.dto.RegisterUserDto;
 import com.manuja.bankingapp.dto.VerifyUserDto;
+import com.manuja.bankingapp.model.LoginAttempt;
 import com.manuja.bankingapp.model.User;
+import com.manuja.bankingapp.responses.LoginAttemptsRepository;
 import com.manuja.bankingapp.responses.UserRepository;
 import jakarta.mail.MessagingException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-
+@Service
 public class AuthenticationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final LoginAttemptsRepository loginAttemptRepository;
 
     public AuthenticationService(
             UserRepository userRepository,
             AuthenticationManager authenticationManager,
             PasswordEncoder passwordEncoder,
-            EmailService emailService
+            EmailService emailService,
+            LoginAttemptsRepository loginAttemptRepository
     ) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.loginAttemptRepository = loginAttemptRepository;
     }
 
-    public User signup(RegisterUserDto input) {
+    public User signup(RegisterUserDto input, String ipAddress) {
+        //creating new user
         User user = new User(input.getUsername(), input.getEmail(), passwordEncoder.encode(input.getPassword()));
         user.setVerificationCode(generateVerificationCode());
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
         user.setEnabled(false);
         sendVerificationEmail(user);
+        //setting the IP for the signup as a login attempt
+        LoginAttempt signupAttempt = new LoginAttempt();
+        signupAttempt.setEmail(user.getEmail());
+        signupAttempt.setIpAddress(ipAddress);
+        signupAttempt.setSuccessful(true);
+        signupAttempt.setAttemptTime(LocalDateTime.now());
+        signupAttempt.setStatus("SIGNUP");
+
+        loginAttemptRepository.save(signupAttempt);
         return userRepository.save(user);
+        //returning and saving  user repository
     }
 
-    public User authenticate(LoginUserDto input) {
+    public User authenticate(LoginUserDto input, String ipAddress) {
+        List<LoginAttempt> recentAttempts = loginAttemptRepository.findByEmailAndAttemptTimeAfter(
+                        input.getEmail(),
+                        LocalDateTime.now().minusMinutes(2)
+                );
+        long failedAttempts = recentAttempts.stream()
+                .filter(attempt -> !attempt.isSuccessful())
+                .count();
+        if (failedAttempts >= 5) {
+            throw new RuntimeException(
+                    "Suspicious activity detected. Too many failed attempts."
+            );
+        }
         User user = userRepository.findByEmail(input.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
         if (!user.isEnabled()) {
-            throw new RuntimeException("Account not verified. Please verify your account.");
+            throw new RuntimeException(
+                    "Account not verified. Please verify your account."
+            );
         }
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        input.getEmail(),
-                        input.getPassword()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            input.getEmail(),
+                            input.getPassword()
+                    )
+            );
+            LoginAttempt successAttempt = new LoginAttempt();
+            successAttempt.setEmail(input.getEmail());
+            successAttempt.setIpAddress(ipAddress);
+            successAttempt.setSuccessful(true);
+            successAttempt.setAttemptTime(LocalDateTime.now());
+            successAttempt.setStatus("NORMAL");
 
-        return user;
+            loginAttemptRepository.save(successAttempt);
+            return user;
+        } catch (Exception e) {
+
+            LoginAttempt failedAttempt = new LoginAttempt();
+            failedAttempt.setEmail(input.getEmail());
+            failedAttempt.setIpAddress(ipAddress);
+            failedAttempt.setSuccessful(false);
+            failedAttempt.setAttemptTime(LocalDateTime.now());
+            failedAttempt.setStatus("FAILED");
+            loginAttemptRepository.save(failedAttempt);
+            throw new RuntimeException("Invalid email or password");
+        }
     }
 
     public void verifyUser(VerifyUserDto input) {
