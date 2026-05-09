@@ -13,7 +13,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -40,20 +39,32 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> authenticate(@RequestBody LoginUserDto loginUserDto,  HttpServletRequest request){
+    public ResponseEntity<?> authenticate(@RequestBody LoginUserDto loginUserDto,  HttpServletRequest request){
         String ipAddress = request.getRemoteAddr();
-        User authenticatedUser = authenticationService.authenticate(loginUserDto, ipAddress);
+        authenticationService.authenticate(loginUserDto, ipAddress);
+        return  ResponseEntity.ok(new MessageResponse("OTP sent successfully"));
+
+    }
+
+    @PostMapping("/verify-login-otp")
+    public ResponseEntity<LoginResponse> verifyLoginOtp(
+            @RequestBody VerifyUserDto input
+    ) {
+
+        User authenticatedUser = authenticationService.verifyLoginOtp(input);
         String jwtToken = jwtService.generateToken(authenticatedUser);
-        LoginResponse loginResponse = new LoginResponse(jwtToken, jwtService.getExpirationTime(),"Login Successful");
-
+        LoginResponse loginResponse = new LoginResponse(
+                jwtToken,
+                jwtService.getExpirationTime(),
+                "Login Successful"
+        );
         return ResponseEntity.ok(loginResponse);
-
     }
 
     @PostMapping("/verify")
     public ResponseEntity<?> verifyUser(@RequestBody VerifyUserDto verifyUserDto) {
         try {
-            authenticationService.verifyUser(verifyUserDto);
+            authenticationService.verifyUserEmail(verifyUserDto);
             return ResponseEntity.ok(  new MessageResponse(
                     "Account verified successfully"
             ));

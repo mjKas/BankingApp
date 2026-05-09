@@ -61,7 +61,7 @@ public class AuthenticationService {
         //returning and saving  user repository
     }
 
-    public User authenticate(LoginUserDto input, String ipAddress) {
+    public void authenticate(LoginUserDto input, String ipAddress) {
         List<LoginAttempt> recentAttempts = loginAttemptRepository.findByEmailAndAttemptTimeAfter(
                 input.getEmail(),
                 LocalDateTime.now().minusMinutes(2)
@@ -94,15 +94,20 @@ public class AuthenticationService {
                             input.getPassword()
                     )
             );
+            // Generate LOGIN OTP
+            user.setVerificationCode(generateVerificationCode());
+            user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(5));
+            userRepository.save(user);
+            sendLoginOtp(user);
+            /*
             LoginAttempt successAttempt = new LoginAttempt();
             successAttempt.setEmail(input.getEmail());
             successAttempt.setIpAddress(ipAddress);
             successAttempt.setSuccessful(true);
             successAttempt.setAttemptTime(LocalDateTime.now());
             successAttempt.setStatus("NORMAL");
-
             loginAttemptRepository.save(successAttempt);
-            return user;
+            return user;*/
         } catch (Exception e) {
 
             LoginAttempt failedAttempt = new LoginAttempt();
@@ -119,7 +124,39 @@ public class AuthenticationService {
         }
     }
 
-    public void verifyUser(VerifyUserDto input) {
+    public User verifyLoginOtp(VerifyUserDto input) {
+
+        User user = userRepository.findByEmail(input.getEmail())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User not found"
+                ));
+
+        if (user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "OTP expired"
+            );
+        }
+
+        if (!user.getVerificationCode().equals(input.getVerificationCode())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid OTP"
+            );
+        }
+
+        // Clear OTP after successful login verification
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiresAt(null);
+        userRepository.save(user);
+
+        return user;
+    }
+
+    public void  verifyUserEmail(VerifyUserDto input) {
         Optional<User> optionalUser = userRepository.findByEmail(input.getEmail());
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
@@ -176,8 +213,8 @@ public class AuthenticationService {
     }
 
     private void sendVerificationEmail(User user) {
-        String subject = "Account Verification";
-        String verificationCode = "VERIFICATION CODE " + user.getVerificationCode();
+        String subject = "Email Verification";
+        String verificationCode = "Email VERIFICATION CODE " + user.getVerificationCode();
         String htmlMessage = "<html>"
                 + "<body style=\"font-family: Arial, sans-serif;\">"
                 + "<div style=\"background-color: #f5f5f5; padding: 20px;\">"
@@ -199,9 +236,6 @@ public class AuthenticationService {
         }
     }
 
-
-
-
     private void SendLoginWarning(String email) {
         String subject = "Login warning";
         String htmlMessage = "<html>"
@@ -218,6 +252,30 @@ public class AuthenticationService {
 
         try {
             emailService.sendVerificationEmail(email, subject, htmlMessage);
+        } catch (MessagingException e) {
+            // Handle email sending exception
+            e.printStackTrace();
+        }
+    }
+
+    private void sendLoginOtp(User user){
+        String subject = "Account Verification";
+        String verificationCode = "VERIFICATION CODE " + user.getVerificationCode();
+        String htmlMessage = "<html>"
+                + "<body style=\"font-family: Arial, sans-serif;\">"
+                + "<div style=\"background-color: #f5f5f5; padding: 20px;\">"
+                + "<h2 style=\"color: #333;\">Welcome to Banking app!</h2>"
+                + "<p style=\"font-size: 16px;\">Please enter the verification code below to continue:</p>"
+                + "<div style=\"background-color: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1);\">"
+                + "<h3 style=\"color: #333;\">Verification Code:</h3>"
+                + "<p style=\"font-size: 18px; font-weight: bold; color: #007bff;\">" + verificationCode + "</p>"
+                + "</div>"
+                + "</div>"
+                + "</body>"
+                + "</html>";
+
+        try {
+            emailService.sendVerificationEmail(user.getEmail(), subject, htmlMessage);
         } catch (MessagingException e) {
             // Handle email sending exception
             e.printStackTrace();
