@@ -70,7 +70,7 @@ public class AuthenticationService {
                 .filter(attempt -> !attempt.isSuccessful())
                 .count();
         if (failedAttempts >= 5) {
-            SendLoginWarning(input.getEmail());
+            SendLoginWarning(input.getEmail(),ipAddress);
             throw new ResponseStatusException(
                     HttpStatus.TOO_MANY_REQUESTS,
                     "Suspicious activity detected. Too many failed attempts."
@@ -236,15 +236,17 @@ public class AuthenticationService {
         }
     }
 
-    private void SendLoginWarning(String email) {
+    private void SendLoginWarning(String email, String ip) {
         String subject = "Login warning";
         String htmlMessage = "<html>"
                 + "<body style=\"font-family: Arial, sans-serif;\">"
                 + "<div style=\"background-color: #f5f5f5; padding: 20px;\">"
-                + "<h2 style=\"color: #FF0000;\">False Login!</h2>"
-                + "<p style=\"font-size: 16px;\">Unsuccessful Login attempts detected.</p>"
-                + "<div style=\"background-color: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1);\">"
-
+                + "<h2 style=\"color: #FF0000;\">Unsuccessful Login Attempt Detected</h2>"
+                + "<p style=\"font-size: 16px;\">We detected an unsuccessful login attempt on your account.</p>"
+                + "<div style=\"background-color: #fff; padding: 20px; border-radius: 5px; "
+                + "box-shadow: 0 0 10px rgba(0,0,0,0.1);\">"
+                + "<p><strong>IP Address:</strong> " + ip + "</p>"
+                + "<p>If this was not you, please review your account security and consider changing your password.</p>"
                 + "</div>"
                 + "</div>"
                 + "</body>"
