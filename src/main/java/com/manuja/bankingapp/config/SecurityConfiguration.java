@@ -65,7 +65,7 @@ public class SecurityConfiguration {
                 List.of(
                         "http://localhost:5173",
                         "http://localhost:8080",
-                        "100.55.227.121"
+                        "http://100.55.227.121"
                 )
         );
 
